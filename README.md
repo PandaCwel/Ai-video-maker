@@ -1,56 +1,72 @@
 # AI Movie Studio
 
-A modular AI-assisted film production studio designed for Google Colab and a custom web interface.
+Custom web-based AI film production workspace for Google Colab and local deployments.
 
-> **Status:** early development. The current version provides the application shell, project/script APIs, local asset storage, and a browser UI. Actual generative video, voice cloning, lip-sync, and music providers are not yet implemented.
+**Current version: 0.2.0 — provider-backed production foundation.** This is a working application scaffold with real API integrations, not a claim that one click creates a finished 30-minute movie. Generation depends on your provider accounts, model availability, quotas and configuration.
 
-## Goals
-- Custom HTML5/CSS3/JavaScript studio UI (no ComfyUI frontend, no Gradio).
-- FastAPI backend with a documented REST API.
-- Script ingestion and structured screenplay breakdown.
-- Character reference and voice sample asset management.
-- Provider adapters for LLM, image/video, TTS, music and lip-sync services.
-- Resumable production jobs, checkpoints, FFmpeg assembly and MP4 export.
-- Google Colab launcher with optional Google Drive persistence.
+## Included
+- Custom responsive HTML/CSS/JavaScript studio UI. No ComfyUI frontend and no Gradio.
+- FastAPI backend with OpenAPI docs.
+- Persistent project/script/character/voice/asset metadata stored as JSON.
+- LLM screenplay analysis through an OpenAI-compatible Chat Completions endpoint, with an explicit heuristic fallback when no key is configured.
+- AI Director shot breakdown via LLM JSON output.
+- Character profiles and reference image/audio/video uploads.
+- Consent-confirmed voice cloning and speech generation through ElevenLabs.
+- Replicate adapters for image, video, music and lip-sync models. Model identifiers are configured in environment variables.
+- Background jobs persisted as JSON and visible in the UI.
+- Generated output downloads into the project asset library when the provider returns HTTPS output URLs.
+- FFmpeg MP4 concatenation/export for uploaded/generated video assets.
+- Google Colab notebook with Drive persistence and Colab Secrets support.
+- Dockerfile and GitHub Actions pytest workflow.
 
-## Requirements
-- Python 3.10+
-- FFmpeg (required for final rendering; not required to start the API)
-- Optional: API keys for external model providers
+## Quick start (local)
+Python 3.10+ and FFmpeg are recommended.
 
-## Run locally
 ```bash
 python -m venv .venv
-# Windows: .venv\Scripts\activate
-source .venv/bin/activate
+source .venv/bin/activate        # Windows: .venv\\Scripts\\activate
 pip install -r requirements.txt
 cp .env.example .env
 uvicorn app.main:app --reload
 ```
-Open http://127.0.0.1:8000. API docs: http://127.0.0.1:8000/docs
+Open http://127.0.0.1:8000. API documentation: http://127.0.0.1:8000/docs
 
 ## Google Colab
-Open `colab/AI_Movie_Studio.ipynb` in Colab. The notebook installs dependencies and starts the same FastAPI application. Runtime GPU availability depends on the Colab session; heavy generation may require a remote provider or a suitable GPU.
+Open [the notebook](https://github.com/PandaCwel/Ai-video-maker/blob/main/colab/AI_Movie_Studio.ipynb) in Google Colab and run cells from top to bottom. Add provider credentials under Colab **Secrets**. The notebook mounts Drive at `/content/drive/MyDrive/AI-Movie-Studio/data`.
 
-## Current API
+## Provider configuration
+Copy `.env.example` to `.env` and configure only the services you use:
+- `OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, `OPENAI_MODEL` — script analysis and director planning.
+- `REPLICATE_API_TOKEN` and `REPLICATE_IMAGE_MODEL`, `REPLICATE_VIDEO_MODEL`, `REPLICATE_MUSIC_MODEL`, `REPLICATE_LIPSYNC_MODEL` — model IDs in `owner/name` form. The model must accept the input fields passed by `app/services/production.py`; model schemas are not universal.
+- `ELEVENLABS_API_KEY` — speech synthesis and voice cloning.
+
+The UI and API report missing configuration instead of returning fabricated media. Provider pricing, model licenses, voice rights and data handling are the user's responsibility. Clone only voices you own or have explicit permission to use.
+
+## API overview
 - `GET /api/health`
-- `GET/POST /api/projects`
-- `GET/PUT/DELETE /api/projects/{project_id}`
-- `GET/PUT /api/projects/{project_id}/script`
-- `POST /api/projects/{project_id}/script/analyze` (deterministic screenplay breakdown; LLM integration is a later milestone)
+- `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/{id}`
+- `GET/PUT /api/projects/{id}/script`
+- `POST /api/projects/{id}/script/analyze`
+- `POST /api/projects/{id}/director/plan`
+- `POST /api/projects/{id}/characters`
+- `POST /api/projects/{id}/assets`
+- `POST /api/projects/{id}/voices/clone` (requires explicit consent flag)
+- `POST /api/projects/{id}/speech`
+- `POST /api/projects/{id}/generate/{image|video|music|lipsync}`
+- `GET /api/projects/{id}/jobs`, `GET /api/jobs/{job_id}`
+- `POST /api/projects/{id}/render`
 
-## Data and privacy
-Project data is stored under `STUDIO_DATA_DIR` (default: `./data`). Do not commit reference photos, voice samples, API keys, generated media, or private scripts. Only upload voice samples you own or have permission to use.
+## Known limitations
+- Replicate model input fields vary. The generic adapter sends a prompt for image/video/music; lip-sync accepts additional JSON inputs. Configure compatible models or adapt the provider mapping.
+- Generated output files are registered when the provider returns direct HTTPS output URLs in its standard prediction response.
+- The current render endpoint concatenates clips; it does not yet provide multi-track timeline editing, transitions, color grading, subtitles, shot-level audio mixing or a complete sound design suite.
+- Job metadata survives restart, but a process interrupted mid-generation is not automatically resumed; rerun failed/interrupted tasks.
+- Character identity consistency across shots depends on model-specific reference conditioning and is not guaranteed by the generic adapter.
+- No user authentication or multi-user isolation is included. Do not expose this development server publicly without a secure auth/proxy layer.
+- A 30-minute episode is a production target, not a guaranteed output duration. Generation cost, provider limits, shot count, GPU capacity and render time apply.
 
-## Roadmap
-1. [x] API/UI foundation and project persistence
-2. [ ] LLM screenplay analysis and editable scene breakdown
-3. [ ] Character/voice asset studio
-4. [ ] AI director and shot planning
-5. [ ] Video/image provider adapters
-6. [ ] Speech, lip-sync, music and sound design
-7. [ ] Timeline editor, FFmpeg rendering and MP4 export
-8. [ ] Drive checkpoints, resumable workflow and end-to-end tests
+## Tests
+Run `pytest -q`. GitHub Actions runs the test suite on pushes and pull requests. Do not treat a configured workflow as a passing test; check the Actions tab for the actual run result.
 
 ## License
-No license has been selected yet. All rights remain with the respective authors until a license is added.
+No project license has been selected. All rights remain with their respective authors until a license is added.
