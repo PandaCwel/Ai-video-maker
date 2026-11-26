@@ -67,11 +67,13 @@ def local_status():
                 "video": os.getenv("LOCAL_VIDEO_MODEL", "guoyww/animatediff-motion-adapter-v1-5-2"),
                 "music": os.getenv("LOCAL_MUSIC_MODEL", "facebook/musicgen-small"),
                 "voice": "tts_models/multilingual/multi-dataset/xtts_v2",
+                "ip_adapter": os.getenv("LOCAL_IP_ADAPTER_MODEL", "h94/IP-Adapter"),
                 "lipsync": "Wav2Lip (required checkpoint)",
             },
             "lipsync_ready": bool(
                 os.getenv("WAV2LIP_CHECKPOINT") and Path(os.getenv("WAV2LIP_CHECKPOINT", "")).is_file()
                 and (Path(os.getenv("WAV2LIP_REPO", "vendor/Wav2Lip")) / "inference.py").is_file()
+                and (Path(os.getenv("WAV2LIP_REPO", "vendor/Wav2Lip")) / "face_detection/detection/sfd/s3fd.pth").is_file()
             ),
         }
     except Exception as exc:
