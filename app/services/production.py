@@ -192,8 +192,17 @@ def run_full_production(job_id, project_dir, project_id, scenes, reference_asset
             _register(project_dir, raw_clip, "video", f"{job_id}-{index}-raw")
             audio = _make_dialogue_audio(project_dir, job_id, index, shot, voices)
             if audio is None:
-                # No dialogue in this shot: preserve the clip, but do not falsely report lip-sync.
-                clips.append(str(raw_clip))
+                # Silent shots still receive a silent audio stream so FFmpeg concat remains deterministic.
+                silent_clip = video_dir / f"shot_{index:04d}_{job_id[:8]}_silent.mp4"
+                silent = subprocess.run(
+                    [ffmpeg, "-y", "-i", str(raw_clip), "-f", "lavfi", "-i",
+                     "anullsrc=channel_layout=stereo:sample_rate=44100", "-shortest",
+                     "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", str(silent_clip)],
+                    capture_output=True, text=True, timeout=1800,
+                )
+                if silent.returncode or not silent_clip.is_file():
+                    raise LocalModelError("Nie udało się dodać ciszy do ujęcia: " + silent.stderr[-1500:])
+                clips.append(str(silent_clip))
             else:
                 update_job(job_id, message=f"Wav2Lip: synchronizacja ust w ujęciu {index}/{len(shots)}")
                 run_lipsync(raw_clip, audio, final_clip)
