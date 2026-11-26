@@ -32,7 +32,7 @@ uvicorn app.main:app --reload
 Open http://127.0.0.1:8000. API documentation: http://127.0.0.1:8000/docs
 
 ## Google Colab
-Open [the notebook](https://github.com/PandaCwel/Ai-video-maker/blob/main/colab/AI_Movie_Studio.ipynb) in Google Colab and run cells from top to bottom. Add provider credentials under Colab **Secrets**. The notebook mounts Drive at `/content/drive/MyDrive/AI-Movie-Studio/data`.
+[Open AI Movie Studio directly in Google Colab](https://colab.research.google.com/github/PandaCwel/Ai-video-maker/blob/main/colab/AI_Movie_Studio.ipynb), then run cells from top to bottom. [View notebook source](https://github.com/PandaCwel/Ai-video-maker/blob/main/colab/AI_Movie_Studio.ipynb). Add provider credentials under Colab **Secrets**. The notebook mounts Drive at `/content/drive/MyDrive/AI-Movie-Studio/data`.
 
 ## Provider configuration
 Copy `.env.example` to `.env` and configure only the services you use:
