@@ -1,0 +1,12 @@
+# Local inference dependencies. PyTorch is supplied by Google Colab's GPU runtime.
+diffusers>=0.30,<1
+transformers>=4.45,<5
+accelerate>=0.34
+bitsandbytes>=0.43
+sentencepiece>=0.2
+safetensors>=0.4
+scipy>=1.11
+soundfile>=0.12
+imageio>=2.34
+imageio-ffmpeg>=0.5
+coqui-tts>=0.25
