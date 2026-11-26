@@ -1,22 +1,27 @@
-# Development status
+# Implementation status — v0.2.0
 
-## Implemented in v0.1.0
-- FastAPI application and health endpoint.
-- Custom responsive HTML/CSS/JavaScript dashboard.
-- Project create/list/read/update/delete operations.
-- Script save/load endpoints.
-- Baseline screenplay parser that detects common scene headings and likely character cues.
-- Colab notebook that mounts Drive, installs requirements, starts the server and prints a proxy URL.
-- Initial API tests and GitHub Actions test workflow.
+## Implemented
+- Custom responsive browser UI and FastAPI API.
+- Project CRUD, script persistence, characters, asset uploads and voice profiles.
+- OpenAI-compatible screenplay analysis; explicit baseline parser fallback.
+- LLM AI Director JSON shot planning.
+- Replicate API adapter for image/video/music/lip-sync prediction workflows.
+- ElevenLabs voice clone endpoint gated by an explicit user consent confirmation, and speech synthesis.
+- Background job state stored as JSON under STUDIO_DATA_DIR/jobs.
+- Provider output download and registration in project asset metadata for standard HTTPS output URLs.
+- FFmpeg clip concatenation to MP4.
+- Colab notebook that clones the repo, installs FFmpeg/dependencies, mounts Drive, reads Colab Secrets and exposes the web UI.
+- Dockerfile, configuration example, tests and CI workflow.
 
-## Explicitly not implemented yet
-- LLM screenplay analysis (the current parser is deterministic and heuristic).
-- Character image generation or identity consistency.
-- Voice cloning / TTS provider integration.
-- Text-to-video or image-to-video generation.
-- Lip-sync, generated soundtrack or sound effects.
-- Timeline editing, render queue, FFmpeg export, job resume/checkpoint system.
-- Authentication, multi-user isolation or secure public deployment.
+## Not fully solved / production caveats
+- Model-specific schemas differ; users must configure compatible Replicate models and may need to adapt input mappings.
+- Lip-sync requires model-specific input assets/URLs; the UI currently exposes a generic prompt and does not yet upload/host signed input URLs for every model.
+- Character reference conditioning and cross-shot identity consistency depend on selected model capabilities and are not guaranteed by the generic adapter.
+- Render currently concatenates clips; there is no full nonlinear multitrack timeline, transitions, subtitles, audio mixing or color grading.
+- Jobs are persisted, but interrupted external predictions are not automatically resumed.
+- No auth or multi-user isolation; not safe for public exposure as-is.
+- Full 25–30 minute film generation requires significant provider credits/GPU, multiple shots and production iterations. Colab Free does not guarantee that compute.
+- The test suite must be executed in CI/Colab; no claim of passing tests is made until an actual run reports success.
 
-## Validation
-The repository files and notebook JSON were fetched back from GitHub after commits. The notebook JSON parsed successfully. The test suite has **not** been executed in a Python runtime in this session because the execution environment could not resolve github.com to clone the repository. GitHub Actions is configured to run pytest on pushes and pull requests; check the Actions tab for the first CI result.
+## Safety and rights
+Voice cloning endpoint requires an explicit consent checkbox. Only clone a voice you own or have permission to use. Check model/provider terms, privacy and licensing before commercial use.
