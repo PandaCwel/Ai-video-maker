@@ -1,5 +1,6 @@
 import json
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,9 +12,15 @@ class ProjectNotFoundError(Exception):
 
 
 class ProjectStore:
+    EDITABLE_FIELDS = {"title", "script", "status", "analysis", "characters", "scenes", "assets", "voices", "production"}
+
     def __init__(self, root: Path):
         self.root = root
         self.root.mkdir(parents=True, exist_ok=True)
+
+    def project_dir(self, project_id: str) -> Path:
+        self._path(project_id)
+        return self.root / project_id
 
     def _path(self, project_id: str) -> Path:
         if not re.fullmatch(r"[a-f0-9-]{36}", project_id):
@@ -47,8 +54,8 @@ class ProjectStore:
         now = datetime.now(timezone.utc).isoformat()
         project = {
             "id": str(uuid4()), "title": title.strip(), "created_at": now,
-            "updated_at": now, "script": "", "analysis": None,
-            "characters": [], "scenes": [], "status": "draft"
+            "updated_at": now, "script": "", "analysis": None, "characters": [],
+            "voices": [], "assets": [], "scenes": [], "production": {}, "status": "draft"
         }
         return self._write(project)
 
@@ -58,7 +65,7 @@ class ProjectStore:
     def update(self, project_id: str, **changes: Any) -> dict[str, Any]:
         project = self._read(project_id)
         for key, value in changes.items():
-            if key in {"title", "script", "status"}:
+            if key in self.EDITABLE_FIELDS:
                 project[key] = value
         project["updated_at"] = datetime.now(timezone.utc).isoformat()
         return self._write(project)
@@ -67,5 +74,4 @@ class ProjectStore:
         path = self._path(project_id)
         if not path.is_file():
             raise ProjectNotFoundError(project_id)
-        import shutil
         shutil.rmtree(path.parent)
