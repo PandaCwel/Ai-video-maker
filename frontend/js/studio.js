@@ -1,64 +1,28 @@
-const $ = (selector) => document.querySelector(selector);
-const projectsEl = $("#projects");
-const dialog = $("#project-dialog");
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
-}
-
-async function request(url, options = {}) {
-  const response = await fetch(url, {headers: {"Content-Type":"application/json"}, ...options});
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || `Request failed (${response.status})`);
-  }
-  return response.status === 204 ? null : response.json();
-}
-
-async function loadProjects() {
-  try {
-    const {projects} = await request("/api/projects");
-    $("#project-count").textContent = `${projects.length} project${projects.length === 1 ? "" : "s"}`;
-    if (!projects.length) {
-      projectsEl.innerHTML = '<div class="empty-state">No projects yet. Create your first film project to get started.</div>';
-      return;
-    }
-    projectsEl.innerHTML = projects.map(project => `
-      <article class="project-card" tabindex="0" data-id="${escapeHtml(project.id)}">
-        <div class="project-icon">✦</div>
-        <h3>${escapeHtml(project.title)}</h3>
-        <p>${escapeHtml(project.status)} · Updated ${new Date(project.updated_at).toLocaleDateString()}</p>
-      </article>`).join("");
-    projectsEl.querySelectorAll(".project-card").forEach(card => {
-      card.addEventListener("click", () => openProject(card.dataset.id));
-      card.addEventListener("keydown", event => { if (event.key === "Enter") openProject(card.dataset.id); });
-    });
-  } catch (error) {
-    projectsEl.innerHTML = `<div class="empty-state">Could not load projects: ${escapeHtml(error.message)}</div>`;
-  }
-}
-
-async function openProject(id) {
-  try {
-    const project = await request(`/api/projects/${encodeURIComponent(id)}`);
-    const script = prompt(`Project: ${project.title}\n\nEdit screenplay text (saved when you press OK):`, project.script || "");
-    if (script !== null) {
-      await request(`/api/projects/${encodeURIComponent(id)}/script`, {method:"PUT", body:JSON.stringify({script})});
-      alert("Screenplay saved.");
-      await loadProjects();
-    }
-  } catch (error) { alert(error.message); }
-}
-
-$("#new-project").addEventListener("click", () => { $("#project-title").value = ""; dialog.showModal(); });
-$("#project-form").addEventListener("submit", async event => {
-  event.preventDefault();
-  const title = $("#project-title").value.trim();
-  if (!title) return;
-  try {
-    await request("/api/projects", {method:"POST", body:JSON.stringify({title})});
-    dialog.close();
-    await loadProjects();
-  } catch (error) { alert(error.message); }
-});
-loadProjects();
+const $ = s => document.querySelector(s);
+let activeProject = null;
+let currentProject = null;
+const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(message, error=false){const el=$("#toast");el.textContent=message;el.className=error?"show error":"show";setTimeout(()=>el.className="",4500)}
+async function api(url, options={}){const r=await fetch(url,options);if(!r.ok){let d={};try{d=await r.json()}catch{}throw new Error(d.detail||`HTTP ${r.status}`)}if(r.status===204)return null;const type=r.headers.get("content-type")||"";return type.includes("application/json")?r.json():r.blob()}
+const json=(method,body)=>({method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+function view(name){["projects","studio","production"].forEach(v=>$("#"+v+"-view").hidden=v!==name);document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===name));$("#page-title").textContent=name==="studio"?"Film Studio":name==="production"?"Production jobs":"Projects";$("#new-project").hidden=name!=="projects"}
+async function loadProjects(){try{const {projects}=await api("/api/projects");$("#project-count").textContent=`${projects.length} project(s)`;$("#projects").innerHTML=projects.length?projects.map(p=>`<article class="project-card" data-id="${escapeHtml(p.id)}"><div class="project-icon">✦</div><h3>${escapeHtml(p.title)}</h3><p>${escapeHtml(p.status)} · ${new Date(p.updated_at).toLocaleDateString()}</p></article>`).join(""):'<div class="empty-state">No projects yet. Create your first film.</div>';document.querySelectorAll(".project-card").forEach(c=>c.onclick=()=>openProject(c.dataset.id))}catch(e){toast(e.message,true)}}
+async function openProject(id){try{currentProject=await api("/api/projects/"+id);activeProject=id;$("#studio-title").textContent=currentProject.title;$("#project-status").textContent=currentProject.status;$("#script").value=currentProject.script||"";renderProjectData();view("studio")}catch(e){toast(e.message,true)}}
+async function refreshProject(){currentProject=await api("/api/projects/"+activeProject);renderProjectData()}
+function renderProjectData(){const p=currentProject;$("#characters").innerHTML=(p.characters||[]).map(c=>`<div class="mini-item"><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.description||c.visual_traits||"")}</small></div>`).join("")||'<p class="muted">No characters yet.</p>';$("#voices").innerHTML=(p.voices||[]).map(v=>`<div class="mini-item"><b>${escapeHtml(v.name)}</b><small>${escapeHtml(v.provider)} · ${escapeHtml(v.provider_voice_id)}</small></div>`).join("")||'<p class="muted">No voice profiles yet.</p>';$("#tts-voice").innerHTML=(p.voices||[]).map(v=>`<option value="${escapeHtml(v.provider_voice_id)}">${escapeHtml(v.name)}</option>`).join("");$("#assets").innerHTML=(p.assets||[]).map(a=>`<div class="mini-item"><b>${escapeHtml(a.name)}</b><small>${escapeHtml(a.category)} · ${Math.round(a.size/1024)} KB</small></div>`).join("")||'<p class="muted">No uploaded assets yet.</p>';$("#render-select").innerHTML=(p.assets||[]).filter(a=>a.category==="video").map(a=>`<label class="asset-choice"><input type="checkbox" value="${escapeHtml(a.id)}"> ${escapeHtml(a.name)}</label>`).join("")||'<p class="muted">Upload or generate video clips first.</p>'}
+async function saveScript(){await api("/api/projects/"+activeProject+"/script",json("PUT",{script:$("#script").value}));toast("Screenplay saved.")}
+$("#new-project").onclick=()=>{$("#project-title").value="";$("#project-dialog").showModal()};
+$("#project-form").onsubmit=async e=>{e.preventDefault();try{await api("/api/projects",json("POST",{title:$("#project-title").value.trim()}));$("#project-dialog").close();await loadProjects();toast("Project created.")}catch(err){toast(err.message,true)}};
+$("#save-script").onclick=()=>saveScript().catch(e=>toast(e.message,true));
+$("#back-projects").onclick=()=>{view("projects");loadProjects()};
+document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>{if(b.dataset.view==="production")loadJobs();view(b.dataset.view);if(b.dataset.view==="projects")loadProjects()});
+$("#analyze-script").onclick=async()=>{try{await saveScript();const r=await api("/api/projects/"+activeProject+"/script/analyze",{method:"POST"});$("#analysis-result").textContent=`Engine: ${r.engine||"unknown"} · Scenes: ${r.scene_count??r.scenes?.length??0} · ${r.warning||r.notice||r.logline||""}`;await refreshProject();toast("Screenplay analysis complete.")}catch(e){toast(e.message,true)}};
+$("#director-plan").onclick=async()=>{try{await saveScript();const r=await api("/api/projects/"+activeProject+"/director/plan",{method:"POST"});$("#analysis-result").textContent=`AI Director: ${r.scenes.length} scenes planned · ${r.logline||""}`;await refreshProject();toast("Shot plan created.")}catch(e){toast(e.message,true)}};
+$("#character-form").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await api("/api/projects/"+activeProject+"/characters",json("POST",{name:f.get("name"),description:f.get("description"),visual_traits:f.get("visual_traits")}));e.target.reset();await refreshProject();toast("Character added.")}catch(err){toast(err.message,true)}};
+$("#asset-form").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);f.set("category",f.get("category"));try{await api("/api/projects/"+activeProject+"/assets",{method:"POST",body:f});e.target.reset();await refreshProject();toast("Asset uploaded.")}catch(err){toast(err.message,true)}};
+$("#voice-form").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const data=new FormData();data.append("name",f.get("name"));data.append("sample",f.get("sample"));data.append("consent_confirmed",f.get("consent")==="on"?"true":"false");try{await api("/api/projects/"+activeProject+"/voices/clone",{method:"POST",body:data});e.target.reset();await refreshProject();toast("Voice clone created.")}catch(err){toast(err.message,true)}};
+$("#make-speech").onclick=async()=>{try{const voice_id=$("#tts-voice").value;if(!voice_id)throw new Error("Add a voice profile first.");const r=await api("/api/projects/"+activeProject+"/speech",json("POST",{voice_id,text:$("#tts-text").value}));toast("Speech job queued: "+r.id);loadJobs()}catch(e){toast(e.message,true)}};
+$("#generate").onclick=async()=>{try{const kind=$("#generation-kind").value;const r=await api("/api/projects/"+activeProject+"/generate/"+kind,json("POST",{prompt:$("#generation-prompt").value}));toast("Generation queued: "+r.id);loadJobs()}catch(e){toast(e.message,true)}};
+async function loadJobs(){if(!activeProject){$("#jobs").innerHTML='<p class="muted">Open a project first.</p>';return}try{const {jobs}=await api("/api/projects/"+activeProject+"/jobs");$("#jobs").innerHTML=jobs.length?jobs.slice().reverse().map(j=>`<div class="job-card"><b>${escapeHtml(j.kind)}</b><span class="job-status">${escapeHtml(j.status)}</span><small>${escapeHtml(j.message||"")}</small><div class="progress"><i style="width:${Math.max(0,Math.min(100,j.progress||0))}%"></i></div>${j.error?`<small class="error-text">${escapeHtml(j.error)}</small>`:""}${j.result?.saved_files?.map(f=>`<small>${escapeHtml(f)}</small>`).join("")||""}</div>`).join(""):'<div class="empty-state">No production jobs yet.</div>'}catch(e){toast(e.message,true)}}
+$("#render").onclick=async()=>{const ids=[...document.querySelectorAll("#render-select input:checked")].map(x=>x.value);if(!ids.length){toast("Select at least one video clip.",true);return}try{const blob=await api("/api/projects/"+activeProject+"/render",json("POST",{asset_ids:ids}));const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="AI-Movie-Studio.mp4";a.click();URL.revokeObjectURL(url);toast("MP4 export complete.")}catch(e){toast(e.message,true)}};
+loadProjects();view("projects");
