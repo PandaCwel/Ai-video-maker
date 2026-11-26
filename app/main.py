@@ -15,7 +15,7 @@ from app.services.jobs import create_job, get_job, list_jobs
 from app.services.media import save_upload
 from app.services.production import run_full_production, run_generation, run_tts
 from app.services.project_store import ProjectNotFoundError, ProjectStore
-from app.services.providers import ElevenLabsProvider, OpenAICompatibleLLM, ProviderError
+from app.services.local_models import LocalModelError, local_llm_json, local_status
 from app.services.render import RenderError, render_video
 from app.services.screenplay import analyze_screenplay
 
@@ -95,8 +95,7 @@ def get_project_or_404(project_id: str):
 @app.get("/api/health")
 def health():
     return {"status": "ok", "app": settings.app_name, "version": app.version,
-            "providers": {"llm": bool(os.getenv("OPENAI_API_KEY")), "replicate": bool(os.getenv("REPLICATE_API_TOKEN")),
-                          "speech": bool(os.getenv("ELEVENLABS_API_KEY"))}}
+            "mode": "local-only", "api_keys_required": False, "runtime": local_status()}
 
 
 @app.get("/api/projects")
@@ -234,24 +233,19 @@ def add_voice(project_id: str, payload: VoiceCreate):
 @app.post("/api/projects/{project_id}/voices/clone", status_code=201)
 async def clone_voice(project_id: str, name: str = Form(...), consent_confirmed: bool = Form(False), sample: UploadFile = File(...)):
     project = get_project_or_404(project_id)
-    if not consent_confirmed:
-        raise HTTPException(status_code=400, detail="Potwierdź, że masz prawo użyć tej próbki głosu.")
+    if not consent_confirmed: raise HTTPException(status_code=400, detail="Potwierdź prawo do użycia próbki głosu.")
     suffix = Path(sample.filename or "").suffix.lower()
-    if suffix not in {".wav", ".mp3", ".m4a", ".ogg", ".flac"}:
-        raise HTTPException(status_code=400, detail="Prześlij próbkę audio WAV, MP3, M4A, OGG lub FLAC.")
+    if suffix not in {".wav", ".mp3", ".m4a", ".ogg", ".flac"}: raise HTTPException(status_code=400, detail="Nieobsługiwany format próbki.")
     content = await sample.read()
-    if len(content) > 25 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Próbka głosu przekracza limit 25 MB.")
-    try:
-        cloned = await ElevenLabsProvider().clone_voice(name, sample.filename or "voice_sample.wav", content)
-    except ProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    voice = {"id": __import__("uuid").uuid4().hex, "name": name, "provider": "elevenlabs",
-             "provider_voice_id": cloned["voice_id"], "consent_confirmed": True}
-    voices = project.get("voices", [])
-    voices.append(voice)
-    store.update(project_id, voices=voices)
-    return voice
+    if len(content) > 25 * 1024 * 1024: raise HTTPException(status_code=400, detail="Próbka przekracza 25 MB.")
+    voice_dir = store.project_dir(project_id) / "assets" / "voices"
+    voice_dir.mkdir(parents=True, exist_ok=True)
+    sample_path = voice_dir / ("voice_" + __import__("uuid").uuid4().hex + suffix)
+    sample_path.write_bytes(content)
+    voice = {"id": __import__("uuid").uuid4().hex, "name": name, "provider": "local XTTS-v2", "sample_path": str(sample_path), "language": "pl", "consent_confirmed": True}
+    voices = project.get("voices", []); voices.append(voice); store.update(project_id, voices=voices)
+    return {key: value for key, value in voice.items() if key != "sample_path"}
+
 
 @app.post("/api/projects/{project_id}/speech", status_code=202)
 def create_speech(project_id: str, payload: SpeechRequest, background: BackgroundTasks):
