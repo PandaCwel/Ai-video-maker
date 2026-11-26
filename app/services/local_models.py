@@ -168,10 +168,18 @@ def generate_video(prompt: str, output: Path, reference: Path | None = None, fra
                 pipe.enable_model_cpu_offload()
             else:
                 pipe.to("cpu")
+            call_kwargs = {}
             if reference:
-                # Do not claim pixel-level identity preservation: AnimateDiff base pipeline has no image-conditioning input.
-                prompt += ", guided by the supplied character reference description"
-            result = pipe(prompt=prompt, num_frames=max(8, min(int(frames), 24)), guidance_scale=7, num_inference_steps=18).frames[0]
+                from PIL import Image
+                if not hasattr(pipe, "load_ip_adapter"):
+                    raise LocalModelError("Ta wersja Diffusers nie obsługuje IP-Adapter dla AnimateDiff. Zaktualizuj requirements-local.txt.")
+                adapter_id = os.getenv("LOCAL_IP_ADAPTER_MODEL", "h94/IP-Adapter")
+                pipe.load_ip_adapter(adapter_id, subfolder="models", weight_name="ip-adapter_sd15.bin")
+                pipe.set_ip_adapter_scale(float(os.getenv("LOCAL_IP_ADAPTER_SCALE", "0.65")))
+                with Image.open(reference) as ref_image:
+                    call_kwargs["ip_adapter_image"] = ref_image.convert("RGB")
+            result = pipe(prompt=prompt, num_frames=max(8, min(int(frames), 24)), guidance_scale=7,
+                           num_inference_steps=18, **call_kwargs).frames[0]
             output.parent.mkdir(parents=True, exist_ok=True)
             imageio.mimsave(output, result, fps=fps, macro_block_size=1)
             return output
