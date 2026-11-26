@@ -75,6 +75,20 @@ class ElevenLabsProvider:
         self.key = os.getenv("ELEVENLABS_API_KEY")
         self.base = "https://api.elevenlabs.io/v1"
 
+    async def clone_voice(self, name: str, sample_name: str, sample_bytes: bytes) -> dict:
+        if not self.key:
+            raise ProviderError("Brak ELEVENLABS_API_KEY.")
+        files = {"files": (sample_name, sample_bytes, "application/octet-stream")}
+        data = {"name": name, "description": "Voice cloned from a user-provided sample with confirmed permission."}
+        async with httpx.AsyncClient(timeout=300) as client:
+            response = await client.post(f"{self.base}/voices/add",
+                headers={"xi-api-key": self.key}, data=data, files=files)
+            response.raise_for_status()
+            result = response.json()
+            if not result.get("voice_id"):
+                raise ProviderError("ElevenLabs nie zwrócił voice_id.")
+            return result
+
     async def synthesize(self, voice_id: str, text: str, output: Path) -> Path:
         if not self.key:
             raise ProviderError("Brak ELEVENLABS_API_KEY.")
