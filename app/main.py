@@ -90,6 +90,28 @@ def get_project_or_404(project_id: str):
         raise HTTPException(status_code=404, detail="Project not found")
 
 
+def _sync_director_cast(project_id: str, plan: dict):
+    project = store.get(project_id)
+    existing = project.get("characters", [])
+    known = {str(item.get("name", "")).strip().casefold() for item in existing}
+    for item in plan.get("characters", []):
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        name = str(item["name"]).strip()
+        if name.casefold() in known:
+            continue
+        existing.append({
+            "id": __import__("uuid").uuid4().hex,
+            "name": name,
+            "description": str(item.get("description", "")),
+            "visual_traits": str(item.get("visual_traits", "")),
+            "voice_notes": str(item.get("voice_notes", "")),
+            "reference_asset_id": None,
+        })
+        known.add(name.casefold())
+    store.update(project_id, characters=existing)
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "app": settings.app_name, "version": app.version,
@@ -151,6 +173,7 @@ def analyze_script(project_id: str):
     except LocalModelError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     store.update(project_id, analysis=analysis, scenes=analysis["scenes"], status="planning")
+    _sync_director_cast(project_id, analysis)
     return analysis
 
 
@@ -164,6 +187,7 @@ def director_plan(project_id: str):
     except LocalModelError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     store.update(project_id, analysis=plan, scenes=plan["scenes"], status="planning")
+    _sync_director_cast(project_id, plan)
     return plan
 
 
