@@ -1,5 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
@@ -8,6 +11,12 @@ from app.services.screenplay import analyze_screenplay
 
 store = ProjectStore(settings.projects_dir)
 app = FastAPI(title=settings.app_name, version="0.1.0", description="AI film production workspace API")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+app.mount("/static", StaticFiles(directory=ROOT_DIR / "frontend"), name="static")
+
+@app.get("/", include_in_schema=False)
+def studio_home():
+    return FileResponse(ROOT_DIR / "frontend" / "index.html")
 
 app.add_middleware(
     CORSMiddleware,
