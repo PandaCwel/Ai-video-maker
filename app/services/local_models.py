@@ -238,14 +238,36 @@ def synthesize_voice(text: str, sample: Path, output: Path, language="pl"):
 
 
 def ensure_wav2lip():
-    checkpoint = Path(os.getenv("WAV2LIP_CHECKPOINT", ""))
+    """Download Wav2Lip code and weights only when the first lip-sync job is requested."""
+    checkpoint = Path(os.getenv("WAV2LIP_CHECKPOINT", str(Path(os.getenv("STUDIO_DATA_DIR", "./data")).parent / "models" / "wav2lip_gan.pth")))
     repo = Path(os.getenv("WAV2LIP_REPO", "vendor/Wav2Lip"))
     script = repo / "inference.py"
-    if not checkpoint.is_file():
-        raise LocalModelError("Lip-sync jest wymagany. Brak checkpointu Wav2Lip. Umieść legalnie pozyskany wav2lip_gan.pth w Google Drive i ustaw WAV2LIP_CHECKPOINT.")
-    if not script.is_file():
-        raise LocalModelError("Lip-sync jest wymagany. Brak kodu Wav2Lip. Uruchom komórkę instalacyjną Wav2Lip w notebooku.")
-    return checkpoint, script
+    try:
+        if not script.is_file():
+            repo.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["git", "clone", "--depth", "1", "https://github.com/Rudrabha/Wav2Lip.git", str(repo)],
+                           check=True, capture_output=True, text=True, timeout=600)
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        if not checkpoint.is_file():
+            subprocess.run([sys.executable, "-m", "gdown", "--id",
+                            "15G3U08c8xsCkOqQxE38Z2XXDnPcOptNk", "-O", str(checkpoint)],
+                           check=True, capture_output=True, text=True, timeout=1800)
+        detector = repo / "face_detection" / "detection" / "sfd" / "s3fd.pth"
+        if not detector.is_file():
+            detector.parent.mkdir(parents=True, exist_ok=True)
+            import urllib.request
+            urllib.request.urlretrieve(
+                "https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth", detector
+            )
+        if not checkpoint.is_file() or checkpoint.stat().st_size < 1024 * 1024:
+            raise LocalModelError("Pobrany checkpoint Wav2Lip jest niekompletny.")
+        return checkpoint.resolve(), script.resolve()
+    except LocalModelError:
+        raise
+    except Exception as exc:
+        raise LocalModelError(
+            "Nie udało się przygotować wymaganego Wav2Lip. Sprawdź internet, gdown i miejsce na Google Drive: " + str(exc)
+        ) from exc
 
 
 def run_lipsync(video: Path, audio: Path, output: Path):
