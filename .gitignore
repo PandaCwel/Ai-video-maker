@@ -1,0 +1,17 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+data/
+outputs/
+checkpoints/
+*.mp4
+*.wav
+*.mp3
+*.png
+*.jpg
+*.jpeg
+.DS_Store
