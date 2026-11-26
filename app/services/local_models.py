@@ -253,7 +253,7 @@ def run_lipsync(video: Path, audio: Path, output: Path):
     if not video.is_file() or not audio.is_file():
         raise LocalModelError("Lip-sync wymaga istniejącego pliku wideo i audio.")
     output.parent.mkdir(parents=True, exist_ok=True)
-    command = [sys.executable, str(script), "--checkpoint_path", str(checkpoint), "--face", str(video), "--audio", str(audio), "--outfile", str(output), "--nosmooth"]
+    command = [sys.executable, str(script.resolve()), "--checkpoint_path", str(checkpoint.resolve()), "--face", str(video.resolve()), "--audio", str(audio.resolve()), "--outfile", str(output.resolve()), "--nosmooth"]
     try:
         proc = subprocess.run(command, capture_output=True, text=True, timeout=7200, cwd=str(script.parent))
         if proc.returncode:
