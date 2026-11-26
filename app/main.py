@@ -318,3 +318,19 @@ def start_full_production(project_id: str, payload: ProductionStart, background:
     background.add_task(run_full_production, job["id"], store.project_dir(project_id), project_id, scenes, payload.reference_asset_id)
     store.update(project_id, status="producing")
     return job
+
+
+@app.get("/api/jobs/{job_id}/download")
+def download_job_output(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    result = job.get("result") or {}
+    output = result.get("final_video") or result.get("path")
+    if not output:
+        raise HTTPException(status_code=404, detail="This job has no downloadable output.")
+    path = Path(output).resolve()
+    project_dir = store.project_dir(job["project_id"]).resolve()
+    if not path.is_relative_to(project_dir) or not path.is_file():
+        raise HTTPException(status_code=404, detail="Output file not found.")
+    return FileResponse(path, media_type="video/mp4" if path.suffix == ".mp4" else "application/octet-stream", filename=path.name)
