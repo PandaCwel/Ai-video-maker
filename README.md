@@ -9,7 +9,7 @@ Public model weights are downloaded from their model repositories on first use a
 |---|---|---|
 | Screenplay analysis + AI Director | Qwen 2.5 3B Instruct | Transformers, 4-bit quantization when available |
 | Still image generation | Stable Diffusion 1.5 | Diffusers; text-to-image and image-to-image |
-| Short video generation | AnimateDiff + SD 1.5 | Generates short animated clips, one shot at a time |
+| Short video generation | AnimateDiff + SD 1.5 + IP-Adapter | Generates short animated clips; uses selected character reference images when supplied |
 | Voice cloning + speech | Coqui XTTS-v2 | Uses an uploaded reference voice sample; permission required |
 | Music generation | MusicGen-small | Local short music clips |
 | Lip-sync | Wav2Lip | Required for full production; code and checkpoint download on first production run |
@@ -71,7 +71,7 @@ This is local inference, not unlimited compute. Colab Free does not guarantee a 
 - SD 1.5 / AnimateDiff quality and speed depend on GPU memory. CPU mode is extremely slow.
 - Cross-shot identity consistency is not guaranteed by the base AnimateDiff adapter.
 - XTTS-v2 supports voice cloning from a local reference recording; clone only voices you own or have explicit permission to use.
-- Full production requires Wav2Lip and a voice profile for every speaking character. The Wav2Lip code, GAN checkpoint and face-detection weights are downloaded on the first full-production request and cached on Google Drive. The official Wav2Lip open-source model is restricted to personal/research/non-commercial use; obtain separate permission for commercial use.
+- AI Director creates cast cards automatically. Assign each cast member a reference image and a voice sample; video shots use IP-Adapter image conditioning and XTTS language settings. Full production requires Wav2Lip and a voice profile for every speaking character. The Wav2Lip code, GAN checkpoint and face-detection weights are downloaded on the first full-production request and cached on Google Drive. The official Wav2Lip open-source model is restricted to personal/research/non-commercial use; obtain separate permission for commercial use.
 - The renderer concatenates normalized clips and mixes the generated score under the dialogue. It is not a full nonlinear editor with animated transitions, captions, grading or multi-track authoring.
 - First-run model downloads require internet access and disk space. Model inference itself is local; weights are cached in Drive when using Colab.
 - Model licenses and acceptable-use terms still apply.
