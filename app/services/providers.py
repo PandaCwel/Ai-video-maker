@@ -27,7 +27,10 @@ class OpenAICompatibleLLM:
                     {"role": "system", "content": system}, {"role": "user", "content": user}
                 ]},
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise ProviderError(f"LLM API zwróciło HTTP {exc.response.status_code}: {exc.response.text[:500]}") from exc
             data = response.json()
             try:
                 return data["choices"][0]["message"]["content"]
@@ -83,7 +86,10 @@ class ElevenLabsProvider:
         async with httpx.AsyncClient(timeout=300) as client:
             response = await client.post(f"{self.base}/voices/add",
                 headers={"xi-api-key": self.key}, data=data, files=files)
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise ProviderError(f"ElevenLabs zwrócił HTTP {exc.response.status_code}: {exc.response.text[:500]}") from exc
             result = response.json()
             if not result.get("voice_id"):
                 raise ProviderError("ElevenLabs nie zwrócił voice_id.")
@@ -96,7 +102,10 @@ class ElevenLabsProvider:
             response = await client.post(f"{self.base}/text-to-speech/{voice_id}",
                 headers={"xi-api-key": self.key, "Accept": "audio/mpeg", "Content-Type": "application/json"},
                 json={"text": text, "model_id": "eleven_multilingual_v2"})
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise ProviderError(f"ElevenLabs TTS zwrócił HTTP {exc.response.status_code}: {exc.response.text[:500]}") from exc
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(response.content)
         return output
