@@ -67,13 +67,16 @@ def _ffmpeg():
 def _dialogue_lines(shot):
     raw = shot.get("dialogue") or []
     if isinstance(raw, str):
-        return [{"character": shot.get("speaker") or "", "text": raw}]
+        text = raw.strip()
+        return [{"character": shot.get("speaker") or "", "text": text}] if text else []
     if isinstance(raw, dict):
         raw = [raw]
     lines = []
     for item in raw:
         if isinstance(item, str):
-            lines.append({"character": shot.get("speaker") or "", "text": item})
+            text = item.strip()
+            if text:
+                lines.append({"character": shot.get("speaker") or "", "text": text})
         elif isinstance(item, dict):
             text = str(item.get("text") or item.get("line") or "").strip()
             character = str(item.get("character") or item.get("speaker") or "").strip()
