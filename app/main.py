@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.services.director import build_shot_plan
 from app.services.jobs import create_job, get_job, list_jobs
 from app.services.media import save_upload
-from app.services.production import run_generation, run_tts
+from app.services.production import run_full_production, run_generation, run_tts
 from app.services.project_store import ProjectNotFoundError, ProjectStore
 from app.services.providers import ElevenLabsProvider, OpenAICompatibleLLM, ProviderError
 from app.services.render import RenderError, render_video
@@ -301,3 +301,20 @@ def render_project(project_id: str, payload: RenderRequest):
     except RenderError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return FileResponse(output, media_type="video/mp4", filename="AI-Movie-Studio.mp4")
+
+
+
+class ProductionStart(BaseModel):
+    reference_asset_id: str | None = None
+
+
+@app.post("/api/projects/{project_id}/production/start", status_code=202)
+def start_full_production(project_id: str, payload: ProductionStart, background: BackgroundTasks):
+    project = get_project_or_404(project_id)
+    scenes = project.get("scenes") or []
+    if not scenes:
+        raise HTTPException(status_code=400, detail="Najpierw zapisz scenariusz i utwórz plan ujęć AI Director.")
+    job = create_job(project_id, "full_production", {"reference_asset_id": payload.reference_asset_id})
+    background.add_task(run_full_production, job["id"], store.project_dir(project_id), project_id, scenes, payload.reference_asset_id)
+    store.update(project_id, status="producing")
+    return job
