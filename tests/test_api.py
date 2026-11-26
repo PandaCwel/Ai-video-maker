@@ -15,7 +15,7 @@ def test_health_and_home():
     assert client.get("/").status_code == 200
 
 
-def test_project_crud_script_analysis_and_character():
+def test_project_crud_script_analysis_and_character(monkeypatch):
     original = main.store
     main.store = isolated_store()
     try:
@@ -24,6 +24,7 @@ def test_project_crud_script_analysis_and_character():
         project_id = created.json()["id"]
         saved = client.put(f"/api/projects/{project_id}/script", json={"script": "INT. ROOM - NIGHT\n\nA light flickers."})
         assert saved.status_code == 200
+        monkeypatch.setattr(main, "local_llm_json", lambda *args, **kwargs: {"logline": "A light flickers.", "genre": "drama", "tone": "quiet", "characters": [], "scenes": [{"number": 1, "heading": "INT. ROOM - NIGHT", "shots": []}]})
         analysis = client.post(f"/api/projects/{project_id}/script/analyze")
         assert analysis.status_code == 200
         assert analysis.json()["scene_count"] == 1 or analysis.json().get("scenes")
@@ -58,3 +59,11 @@ def test_voice_clone_requires_consent_and_upload_validation():
         assert response.status_code == 400
     finally:
         main.store = original
+
+
+def test_runtime_is_local_and_requires_no_api_keys():
+    response = client.get("/api/runtime")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mode"] == "local-only"
+    assert data["api_keys_required"] is False
