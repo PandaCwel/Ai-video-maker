@@ -41,6 +41,22 @@ def _reference(project_dir: Path, asset_id):
     return path
 
 
+def _shot_reference(project_dir: Path, shot, fallback_asset_id=None):
+    project = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+    names = shot.get("characters") or []
+    if isinstance(names, str):
+        names = [names]
+    normalized = []
+    for item in names:
+        normalized.append(str(item.get("name", "")) if isinstance(item, dict) else str(item))
+    for name in normalized:
+        character = next((item for item in project.get("characters", [])
+                          if str(item.get("name", "")).strip().casefold() == name.strip().casefold()), None)
+        if character and character.get("reference_asset_id"):
+            return _reference(project_dir, character["reference_asset_id"])
+    return _reference(project_dir, fallback_asset_id)
+
+
 def _ffmpeg():
     binary = shutil.which("ffmpeg")
     if not binary:
@@ -178,7 +194,6 @@ def run_full_production(job_id, project_dir, project_id, scenes, reference_asset
     try:
         shots, voices = validate_full_production(project_dir, scenes)
         ffmpeg = _ffmpeg()
-        reference = _reference(project_dir, reference_asset_id)
         clips = []
         video_dir = project_dir / "assets" / "video"
         video_dir.mkdir(parents=True, exist_ok=True)
@@ -189,7 +204,8 @@ def run_full_production(job_id, project_dir, project_id, scenes, reference_asset
             raw_clip = video_dir / f"shot_{index:04d}_{job_id[:8]}_raw.mp4"
             final_clip = video_dir / f"shot_{index:04d}_{job_id[:8]}_lipsync.mp4"
             update_job(job_id, progress=max(2, int((index - 1) / len(shots) * 85)), message=f"AnimateDiff: generowanie ujęcia {index}/{len(shots)}")
-            generate_video(prompt, raw_clip, reference)
+            shot_reference = _shot_reference(project_dir, shot, reference_asset_id)
+            generate_video(prompt, raw_clip, shot_reference)
             _register(project_dir, raw_clip, "video", f"{job_id}-{index}-raw")
             audio = _make_dialogue_audio(project_dir, job_id, index, shot, voices)
             if audio is None:
