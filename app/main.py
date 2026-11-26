@@ -233,7 +233,7 @@ def list_assets(project_id: str):
 
 
 @app.post("/api/projects/{project_id}/voices/clone", status_code=201)
-async def clone_voice(project_id: str, name: str = Form(...), consent_confirmed: bool = Form(False), sample: UploadFile = File(...)):
+async def clone_voice(project_id: str, name: str = Form(...), language: str = Form("pl"), consent_confirmed: bool = Form(False), sample: UploadFile = File(...)):
     project = get_project_or_404(project_id)
     if not consent_confirmed:
         raise HTTPException(status_code=400, detail="Potwierdź prawo do użycia próbki głosu.")
@@ -248,7 +248,7 @@ async def clone_voice(project_id: str, name: str = Form(...), consent_confirmed:
     sample_path = voice_dir / ("voice_" + __import__("uuid").uuid4().hex + suffix)
     sample_path.write_bytes(content)
     voice = {"id": __import__("uuid").uuid4().hex, "name": name.strip(), "provider": "local XTTS-v2",
-             "sample_path": str(sample_path), "language": "pl", "consent_confirmed": True}
+             "sample_path": str(sample_path), "language": language, "consent_confirmed": True}
     voices = project.get("voices", [])
     voices.append(voice)
     store.update(project_id, voices=voices)
