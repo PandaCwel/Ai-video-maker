@@ -12,7 +12,7 @@ Public model weights are downloaded from their model repositories on first use a
 | Short video generation | AnimateDiff + SD 1.5 | Generates short animated clips, one shot at a time |
 | Voice cloning + speech | Coqui XTTS-v2 | Uses an uploaded reference voice sample; permission required |
 | Music generation | MusicGen-small | Local short music clips |
-| Lip-sync | Wav2Lip | Local inference; user must supply a lawful checkpoint |
+| Lip-sync | Wav2Lip | Required for full production; code and checkpoint download on first production run |
 | Editing/export | FFmpeg | Local MP4 assembly |
 
 ## Start in Google Colab
@@ -45,8 +45,8 @@ Only local model identifiers and local paths are configurable:
 - `LOCAL_IMAGE_MODEL`
 - `LOCAL_VIDEO_MODEL`
 - `LOCAL_MUSIC_MODEL`
-- `WAV2LIP_CHECKPOINT` (optional, local file)
-- `WAV2LIP_REPO` (optional local source path)
+- `WAV2LIP_CHECKPOINT` (optional override; default checkpoint is cached in the Drive models folder)
+- `WAV2LIP_REPO` (optional source path; cloned on first lip-sync run)
 
 There are no API-key variables in `.env.example`.
 
@@ -66,18 +66,18 @@ There are no API-key variables in `.env.example`.
 - `POST /api/projects/{id}/render`
 
 ## Hardware and honest limitations
-This is local inference, not unlimited compute. Colab Free does not guarantee a GPU, a specific VRAM size, uninterrupted sessions or enough storage. The local image, video, LLM, TTS and music models compete for GPU memory; only load/run one heavy model at a time. AnimateDiff creates short clips; a long episode requires many sequential shots and substantial runtime. It is not realistic to promise a polished 25–30 minute film from one Colab Free session.
+This is local inference, not unlimited compute. Colab Free does not guarantee a GPU, a specific VRAM size, uninterrupted sessions or enough storage. The local image, video, LLM, TTS, music and lip-sync models compete for GPU memory; engines are loaded only when requested, serialized to avoid overlap, and released after each job. Hugging Face weights are cached under `HF_HOME` (Google Drive in Colab). AnimateDiff creates short clips; a long episode requires many sequential shots and substantial runtime. It is not realistic to promise a polished 25–30 minute film from one Colab Free session.
 
 - SD 1.5 / AnimateDiff quality and speed depend on GPU memory. CPU mode is extremely slow.
 - Cross-shot identity consistency is not guaranteed by the base AnimateDiff adapter.
 - XTTS-v2 supports voice cloning from a local reference recording; clone only voices you own or have explicit permission to use.
-- Wav2Lip needs a separately obtained checkpoint. This repository does not redistribute model weights.
-- The current renderer concatenates clips; it is not yet a full nonlinear multi-track editor with transitions, captions, grading and advanced audio mixing.
+- Full production requires Wav2Lip and a voice profile for every speaking character. The Wav2Lip code, GAN checkpoint and face-detection weights are downloaded on the first full-production request and cached on Google Drive. The official Wav2Lip open-source model is restricted to personal/research/non-commercial use; obtain separate permission for commercial use.
+- The renderer concatenates normalized clips and mixes the generated score under the dialogue. It is not a full nonlinear editor with animated transitions, captions, grading or multi-track authoring.
 - First-run model downloads require internet access and disk space. Model inference itself is local; weights are cached in Drive when using Colab.
 - Model licenses and acceptable-use terms still apply.
 
 ## Tests
-Run `python -m pytest -q`. GitHub Actions runs the backend test suite. The CI suite mocks heavy local model execution; it tests API behavior, not actual GPU image/video generation. Real inference must be tested in a GPU runtime.
+Run `python -m pytest -q`. GitHub Actions runs the backend test suite. The CI suite mocks heavy local model execution; it tests API behavior, frontend asset delivery, screenplay chunking and the required lip-sync preflight, not actual GPU image/video generation. Real inference must be tested in a GPU runtime.
 
 ## Safety
 Voice cloning is gated by an explicit consent confirmation. Use only voice samples you own or have permission to use. Protect uploaded reference photos, voices and project data.
