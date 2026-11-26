@@ -1,72 +1,83 @@
-# AI Movie Studio
+# AI Movie Studio — local-only edition
 
-Custom web-based AI film production workspace for Google Colab and local deployments.
+A self-hostable AI film workspace with a custom HTML/CSS/JS interface and FastAPI backend. **All AI inference runs locally in the Python runtime. No OpenAI, Replicate, ElevenLabs, hosted inference endpoint or API key is used.**
 
-**Current version: 0.2.0 — provider-backed production foundation.** This is a working application scaffold with real API integrations, not a claim that one click creates a finished 30-minute movie. Generation depends on your provider accounts, model availability, quotas and configuration.
+Public model weights are downloaded from their model repositories on first use and cached locally / on Google Drive. After the download, inference runs on the Colab GPU/CPU.
 
-## Included
-- Custom responsive HTML/CSS/JavaScript studio UI. No ComfyUI frontend and no Gradio.
-- FastAPI backend with OpenAPI docs.
-- Persistent project/script/character/voice/asset metadata stored as JSON.
-- LLM screenplay analysis through an OpenAI-compatible Chat Completions endpoint, with an explicit heuristic fallback when no key is configured.
-- AI Director shot breakdown via LLM JSON output.
-- Character profiles and reference image/audio/video uploads.
-- Consent-confirmed voice cloning and speech generation through ElevenLabs.
-- Replicate adapters for image, video, music and lip-sync models. Model identifiers are configured in environment variables.
-- Background jobs persisted as JSON and visible in the UI, including sequential multi-shot production jobs.
-- Generated output downloads into the project asset library when the provider returns HTTPS output URLs.
-- FFmpeg MP4 concatenation/export for uploaded/generated video assets, including the multi-shot production output.
-- Google Colab notebook with Drive persistence and Colab Secrets support.
-- Dockerfile and GitHub Actions pytest workflow.
+## Local engines
+| Feature | Local engine | Notes |
+|---|---|---|
+| Screenplay analysis + AI Director | Qwen 2.5 3B Instruct | Transformers, 4-bit quantization when available |
+| Still image generation | Stable Diffusion 1.5 | Diffusers; text-to-image and image-to-image |
+| Short video generation | AnimateDiff + SD 1.5 | Generates short animated clips, one shot at a time |
+| Voice cloning + speech | Coqui XTTS-v2 | Uses an uploaded reference voice sample; permission required |
+| Music generation | MusicGen-small | Local short music clips |
+| Lip-sync | Wav2Lip | Local inference; user must supply a lawful checkpoint |
+| Editing/export | FFmpeg | Local MP4 assembly |
 
-## Quick start (local)
-Python 3.10+ and FFmpeg are recommended.
+## Start in Google Colab
+[Open the local-only notebook in Google Colab](https://colab.research.google.com/github/PandaCwel/Ai-video-maker/blob/main/colab/AI_Movie_Studio.ipynb).
+
+1. Select a GPU runtime (Runtime → Change runtime type → GPU).
+2. Run the notebook cells from top to bottom.
+3. Mount Google Drive when asked. Project files and downloaded Hugging Face model cache are stored there.
+4. Open the generated AI Movie Studio link.
+
+No Secrets, API keys or provider accounts are needed. The notebook does download open model weights from public model repositories; this is not a hosted inference API call.
+
+## Local installation
+Python 3.10/3.11 and FFmpeg recommended.
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-local.txt
 cp .env.example .env
 uvicorn app.main:app --reload
 ```
-Open http://127.0.0.1:8000. API documentation: http://127.0.0.1:8000/docs
 
-## Google Colab
-[Open AI Movie Studio directly in Google Colab](https://colab.research.google.com/github/PandaCwel/Ai-video-maker/blob/main/colab/AI_Movie_Studio.ipynb), then run cells from top to bottom. [View notebook source](https://github.com/PandaCwel/Ai-video-maker/blob/main/colab/AI_Movie_Studio.ipynb). Add provider credentials under Colab **Secrets**. The notebook mounts Drive at `/content/drive/MyDrive/AI-Movie-Studio/data`.
+Open http://127.0.0.1:8000. The local API status is available at `/api/runtime`.
 
-## Provider configuration
-Copy `.env.example` to `.env` and configure only the services you use:
-- `OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, `OPENAI_MODEL` — script analysis and director planning.
-- `REPLICATE_API_TOKEN` and `REPLICATE_IMAGE_MODEL`, `REPLICATE_VIDEO_MODEL`, `REPLICATE_MUSIC_MODEL`, `REPLICATE_LIPSYNC_MODEL` — model IDs in `owner/name` form. The model must accept the input fields passed by `app/services/production.py`; model schemas are not universal.
-- `ELEVENLABS_API_KEY` — speech synthesis and voice cloning.
+## Configuration
+Only local model identifiers and local paths are configurable:
+- `LOCAL_LLM_MODEL`
+- `LOCAL_IMAGE_MODEL`
+- `LOCAL_VIDEO_MODEL`
+- `LOCAL_MUSIC_MODEL`
+- `WAV2LIP_CHECKPOINT` (optional, local file)
+- `WAV2LIP_REPO` (optional local source path)
 
-The UI and API report missing configuration instead of returning fabricated media. Provider pricing, model licenses, voice rights and data handling are the user's responsibility. Clone only voices you own or have explicit permission to use.
+There are no API-key variables in `.env.example`.
 
 ## API overview
-- `GET /api/health`
+- `GET /api/health`, `GET /api/runtime`
 - `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/{id}`
 - `GET/PUT /api/projects/{id}/script`
 - `POST /api/projects/{id}/script/analyze`
 - `POST /api/projects/{id}/director/plan`
 - `POST /api/projects/{id}/characters`
 - `POST /api/projects/{id}/assets`
-- `POST /api/projects/{id}/voices/clone` (requires explicit consent flag)
-- `POST /api/projects/{id}/speech`
+- `POST /api/projects/{id}/voices/clone` (stores the reference sample locally; consent required)
+- `POST /api/projects/{id}/speech` (local XTTS-v2)
 - `POST /api/projects/{id}/generate/{image|video|music|lipsync}`
+- `POST /api/projects/{id}/production/start`
 - `GET /api/projects/{id}/jobs`, `GET /api/jobs/{job_id}`
 - `POST /api/projects/{id}/render`
 
-## Known limitations
-- Replicate model input fields vary. The generic adapter sends a prompt for image/video/music; lip-sync accepts additional JSON inputs. Configure compatible models or adapt the provider mapping.
-- Generated output files are registered when the provider returns direct HTTPS output URLs in its standard prediction response.
-- The current render endpoint concatenates clips; it does not yet provide multi-track timeline editing, transitions, color grading, subtitles, shot-level audio mixing or a complete sound design suite.
-- Job metadata survives restart, but a process interrupted mid-generation is not automatically resumed; rerun failed/interrupted tasks.
-- Character identity consistency across shots depends on model-specific reference conditioning and is not guaranteed by the generic adapter.
-- No user authentication or multi-user isolation is included. Do not expose this development server publicly without a secure auth/proxy layer.
-- A 30-minute episode is a production target, not a guaranteed output duration. Generation cost, provider limits, shot count, GPU capacity and render time apply.
+## Hardware and honest limitations
+This is local inference, not unlimited compute. Colab Free does not guarantee a GPU, a specific VRAM size, uninterrupted sessions or enough storage. The local image, video, LLM, TTS and music models compete for GPU memory; only load/run one heavy model at a time. AnimateDiff creates short clips; a long episode requires many sequential shots and substantial runtime. It is not realistic to promise a polished 25–30 minute film from one Colab Free session.
+
+- SD 1.5 / AnimateDiff quality and speed depend on GPU memory. CPU mode is extremely slow.
+- Cross-shot identity consistency is not guaranteed by the base AnimateDiff adapter.
+- XTTS-v2 supports voice cloning from a local reference recording; clone only voices you own or have explicit permission to use.
+- Wav2Lip needs a separately obtained checkpoint. This repository does not redistribute model weights.
+- The current renderer concatenates clips; it is not yet a full nonlinear multi-track editor with transitions, captions, grading and advanced audio mixing.
+- First-run model downloads require internet access and disk space. Model inference itself is local; weights are cached in Drive when using Colab.
+- Model licenses and acceptable-use terms still apply.
 
 ## Tests
-Run `pytest -q`. GitHub Actions runs the test suite on pushes and pull requests. Do not treat a configured workflow as a passing test; check the Actions tab for the actual run result.
+Run `python -m pytest -q`. GitHub Actions runs the backend test suite. The CI suite mocks heavy local model execution; it tests API behavior, not actual GPU image/video generation. Real inference must be tested in a GPU runtime.
 
-## License
-No project license has been selected. All rights remain with their respective authors until a license is added.
+## Safety
+Voice cloning is gated by an explicit consent confirmation. Use only voice samples you own or have permission to use. Protect uploaded reference photos, voices and project data.
