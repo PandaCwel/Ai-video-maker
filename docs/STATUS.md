@@ -1,27 +1,27 @@
-# Implementation status — v0.2.0
+# Implementation status — local-only transition
 
-## Implemented
-- Custom responsive browser UI and FastAPI API.
-- Project CRUD, script persistence, characters, asset uploads and voice profiles.
-- OpenAI-compatible screenplay analysis; explicit baseline parser fallback.
-- LLM AI Director JSON shot planning.
-- Replicate API adapter for image/video/music/lip-sync prediction workflows.
-- ElevenLabs voice clone endpoint gated by an explicit user consent confirmation, and speech synthesis.
-- Background job state stored as JSON under STUDIO_DATA_DIR/jobs.
-- Provider output download and registration in project asset metadata for standard HTTPS output URLs.
-- Automated multi-shot workflow: iterates through planned shot prompts, requests video generation, downloads clips and assembles a sequential MP4.
-- Colab notebook that clones the repo, installs FFmpeg/dependencies, mounts Drive, reads Colab Secrets and exposes the web UI.
-- Dockerfile, configuration example, tests and CI workflow.
+## Local-only architecture committed
+- Removed OpenAI-compatible, Replicate and ElevenLabs network inference from application workflows.
+- Added local inference module for Qwen 2.5 3B, Stable Diffusion 1.5, AnimateDiff, MusicGen-small and Coqui XTTS-v2.
+- Screenplay analysis and AI Director call local Transformers inference.
+- Voice sample upload now stores the sample in the project and local XTTS uses it for cloning/speech.
+- Image, video, music and lip-sync jobs now dispatch to local engines.
+- Runtime diagnostics report CUDA/GPU/VRAM and explicitly identify local-only mode.
+- Colab notebook no longer reads Secrets or configures API keys; it mounts Drive and persists Hugging Face model cache.
+- Added separate `requirements-local.txt` so basic API tests do not need heavyweight GPU packages.
+- FFmpeg remains the local editor/exporter.
 
-## Not fully solved / production caveats
-- Model-specific schemas differ; users must configure compatible Replicate models and may need to adapt input mappings.
-- Lip-sync requires model-specific input assets/URLs; the UI currently exposes a generic prompt and does not yet upload/host signed input URLs for every model.
-- Character reference conditioning and cross-shot identity consistency depend on selected model capabilities and are not guaranteed by the generic adapter.
-- Automated episode mode currently generates planned video shots sequentially and concatenates them; it does not yet provide a full nonlinear multitrack timeline, transitions, subtitles, audio mixing or color grading.
-- Jobs are persisted, but interrupted external predictions are not automatically resumed.
-- No auth or multi-user isolation; not safe for public exposure as-is.
-- Full 25–30 minute film generation requires significant provider credits/GPU, multiple shots and production iterations. Colab Free does not guarantee that compute.
-- The test suite must be executed in CI/Colab; no claim of passing tests is made until an actual run reports success.
+## Features requiring user-provided local assets
+- Wav2Lip inference requires the Wav2Lip source tree and a checkpoint path. The checkpoint is not redistributed here.
+- Voice cloning requires a reference voice sample and explicit rights/consent.
 
-## Safety and rights
-Voice cloning endpoint requires an explicit consent checkbox. Only clone a voice you own or have permission to use. Check model/provider terms, privacy and licensing before commercial use.
+## Limitations
+- This is not a guarantee of a complete 30-minute feature film in Colab Free. Video generation uses short AnimateDiff clips and a multi-shot episode may take hours or exceed available VRAM/session limits.
+- Base AnimateDiff does not guarantee consistent character identity from shot to shot; the reference-image option currently guides the prompt rather than implementing a dedicated identity adapter.
+- MusicGen-small creates short sound/music clips, not a full soundtrack with automatic score composition.
+- The renderer currently concatenates clips; it is not a nonlinear multitrack timeline with advanced transitions, subtitles, grading and audio mixing.
+- First run downloads public model weights. Those downloads are not API inference requests, but require internet and disk space.
+- CI mocks heavy model inference. A successful CI run does not prove a specific Colab GPU can load all models; GPU smoke testing is still required.
+
+## Safety
+Voice cloning requires an explicit consent confirmation. Only use voice samples with permission. Respect each model's license and terms.
