@@ -100,3 +100,65 @@ async def run_tts(job_id: str, project_dir: Path, payload: dict):
         update_job(job_id, status="succeeded", progress=100, message="Speech generated", result={"path": str(output)})
     except Exception as exc:
         update_job(job_id, status="failed", progress=100, message=str(exc), error=str(exc))
+
+
+
+async def run_full_production(job_id: str, project_dir: Path, project_id: str, scenes: list[dict], reference_asset_id: str | None = None):
+    """Generate each planned shot sequentially and assemble available video outputs."""
+    update_job(job_id, status="running", progress=1, message="Preparing shot list")
+    try:
+        model = os.getenv("REPLICATE_VIDEO_MODEL", "")
+        provider = ReplicateProvider()
+        if not scenes:
+            raise ValueError("Brak planu scen. Najpierw uruchom AI Director.")
+        project_meta = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+        reference = None
+        if reference_asset_id:
+            reference = next((a for a in project_meta.get("assets", []) if a.get("id") == reference_asset_id and a.get("category") == "image"), None)
+            if not reference:
+                raise ValueError("Zdjęcie referencyjne nie istnieje.")
+        reference_data = None
+        if reference:
+            ref_path = Path(reference["path"])
+            if ref_path.stat().st_size > 10 * 1024 * 1024:
+                raise ValueError("Zdjęcie referencyjne przekracza limit 10 MB.")
+            mime = __import__("mimetypes").guess_type(ref_path.name)[0] or "image/jpeg"
+            reference_data = f"data:{mime};base64," + __import__("base64").b64encode(ref_path.read_bytes()).decode("ascii")
+        shots = []
+        for scene in scenes:
+            shots.extend(scene.get("shots", []) if isinstance(scene, dict) else [])
+        if not shots:
+            raise ValueError("Plan AI Director nie zawiera ujęć.")
+        clips = []
+        total = len(shots)
+        for index, shot in enumerate(shots, start=1):
+            prompt = shot.get("visual_prompt") or shot.get("prompt") or shot.get("summary")
+            if not prompt:
+                continue
+            inputs = {"prompt": prompt}
+            if reference_data:
+                inputs["image"] = reference_data
+            result = await provider.run(model, inputs)
+            output = result.get("output")
+            urls = output if isinstance(output, list) else ([output] if isinstance(output, str) else [])
+            if not urls:
+                raise ValueError(f"Model nie zwrócił pliku dla ujęcia {index}.")
+            async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
+                response = await client.get(urls[0])
+                response.raise_for_status()
+            folder = project_dir / "assets" / "video"
+            folder.mkdir(parents=True, exist_ok=True)
+            clip_path = folder / f"shot_{index:04d}_{job_id[:8]}.mp4"
+            clip_path.write_bytes(response.content)
+            clips.append(str(clip_path))
+            _register_generated_assets(project_dir, project_id, [str(clip_path)], "video", f"{job_id}-{index}")
+            progress = min(90, int(index / total * 90))
+            update_job(job_id, progress=progress, message=f"Generated shot {index}/{total}")
+        if not clips:
+            raise ValueError("Żadne ujęcie nie zwróciło klipu wideo.")
+        from app.services.render import render_video
+        final_path = render_video(project_dir, clips, output_name=f"episode_{job_id[:8]}.mp4")
+        update_job(job_id, status="succeeded", progress=100, message=f"Episode assembled from {len(clips)} generated shots",
+                   result={"clip_count": len(clips), "clips": clips, "final_video": str(final_path)})
+    except Exception as exc:
+        update_job(job_id, status="failed", progress=100, message=str(exc), error=str(exc))
