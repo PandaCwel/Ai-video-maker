@@ -293,7 +293,7 @@ def start_full_production(project_id: str, payload: ProductionStart, background:
     if not scenes:
         raise HTTPException(status_code=400, detail="Najpierw zapisz scenariusz i utwórz plan ujęć AI Director.")
     try:
-        validate_full_production(store.project_dir(project_id), scenes)
+        validate_full_production(store.project_dir(project_id), scenes, prepare_lipsync=False)
     except LocalModelError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if payload.reference_asset_id:
