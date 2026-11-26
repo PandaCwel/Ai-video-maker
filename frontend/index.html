@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090b12">
+  <title>AI Movie Studio</title>
+  <link rel="stylesheet" href="/static/css/studio.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">✦</span><div><strong>AI MOVIE</strong><small>STUDIO</small></div></div>
+    <div class="side-label">WORKSPACE</div>
+    <button class="nav-item active">▦ <span>Projects</span></button>
+    <button class="nav-item" disabled>◈ <span>Characters</span><em>soon</em></button>
+    <button class="nav-item" disabled>♫ <span>Voices</span><em>soon</em></button>
+    <button class="nav-item" disabled>▤ <span>Production</span><em>soon</em></button>
+    <div class="sidebar-footer"><span class="status-dot"></span> Local workspace</div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><div><span class="eyebrow">YOUR CREATIVE WORKSPACE</span><h1>Projects</h1></div><button id="new-project" class="primary">＋ New project</button></header>
+    <section class="welcome">
+      <div><span class="eyebrow">FROM SCRIPT TO SCREEN</span><h2>Your next film<br><span>starts here.</span></h2><p>Build stories, shape characters and plan cinematic scenes in one workspace.</p></div>
+      <div class="orb" aria-hidden="true"><div class="orb-core"></div></div>
+    </section>
+    <section class="section-head"><div><h2>Your projects</h2><p id="project-count">Loading projects…</p></div></section>
+    <section id="projects" class="project-grid"><div class="empty-state">Loading…</div></section>
+    <footer>AI MOVIE STUDIO <span>Early development · v0.1.0</span></footer>
+  </main>
+  <dialog id="project-dialog">
+    <form method="dialog" id="project-form">
+      <button class="close" value="cancel" aria-label="Close">×</button>
+      <span class="eyebrow">NEW PRODUCTION</span><h2>Create a project</h2>
+      <label for="project-title">Project title</label><input id="project-title" maxlength="120" required placeholder="e.g. Jupiter 2011 Incident">
+      <div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" id="create-project" value="default">Create project</button></div>
+    </form>
+  </dialog>
+  <script src="/static/js/studio.js" defer></script>
+</body>
+</html>
