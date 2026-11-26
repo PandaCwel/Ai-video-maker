@@ -74,6 +74,16 @@ async def run_tts(job_id: str, project_dir: Path, payload: dict):
     try:
         output = project_dir / "assets" / "audio" / f"speech_{job_id}.mp3"
         await ElevenLabsProvider().synthesize(payload["voice_id"], payload["text"], output)
+        project_file = project_dir / "project.json"
+        if project_file.is_file():
+            project = json.loads(project_file.read_text(encoding="utf-8"))
+            assets = project.setdefault("assets", [])
+            assets.append({"id": f"speech-{job_id}", "name": output.name, "category": "audio",
+                           "path": str(output), "size": output.stat().st_size, "generated": True})
+            project["updated_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+            tmp = project_file.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp.replace(project_file)
         update_job(job_id, status="succeeded", progress=100, message="Speech generated", result={"path": str(output)})
     except Exception as exc:
         update_job(job_id, status="failed", progress=100, message=str(exc), error=str(exc))
