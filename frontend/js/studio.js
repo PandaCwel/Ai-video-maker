@@ -28,3 +28,6 @@ $("#render").onclick=async()=>{const ids=[...document.querySelectorAll("#render-
 loadProjects();view("projects");
 
 $("#start-production").onclick=async()=>{try{const r=await api("/api/projects/"+activeProject+"/production/start",json("POST",{reference_asset_id:$("#generation-reference").value||null}));toast("Full production started: "+r.id);view("production");loadJobs()}catch(e){toast(e.message,true)}};
+
+async function showLocalRuntime(){try{const r=await api("/api/runtime");const el=$("#runtime-status");if(el)el.textContent=r.cuda_available?("LOCAL GPU: "+r.gpu+" · "+r.vram_gb+" GB VRAM · NO API KEYS"):("LOCAL CPU MODE · no CUDA GPU detected");}catch(e){const el=$("#runtime-status");if(el)el.textContent="Local runtime status unavailable";}}
+showLocalRuntime();
