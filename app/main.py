@@ -153,6 +153,7 @@ def analyze_script(project_id: str):
             "Analyze this screenplay and return JSON only with logline, genre, tone, characters and scenes. Preserve story facts and never invent dialogue.",
             project["script"][:50000])
         analysis["engine"] = "local-llm"
+        analysis["scene_count"] = len(analysis.get("scenes", []))
     except LocalModelError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     store.update(project_id, analysis=analysis, scenes=analysis.get("scenes", []), status="planning")
