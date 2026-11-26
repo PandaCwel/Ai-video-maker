@@ -13,9 +13,9 @@ Custom web-based AI film production workspace for Google Colab and local deploym
 - Character profiles and reference image/audio/video uploads.
 - Consent-confirmed voice cloning and speech generation through ElevenLabs.
 - Replicate adapters for image, video, music and lip-sync models. Model identifiers are configured in environment variables.
-- Background jobs persisted as JSON and visible in the UI.
+- Background jobs persisted as JSON and visible in the UI, including sequential multi-shot production jobs.
 - Generated output downloads into the project asset library when the provider returns HTTPS output URLs.
-- FFmpeg MP4 concatenation/export for uploaded/generated video assets.
+- FFmpeg MP4 concatenation/export for uploaded/generated video assets, including the multi-shot production output.
 - Google Colab notebook with Drive persistence and Colab Secrets support.
 - Dockerfile and GitHub Actions pytest workflow.
 
