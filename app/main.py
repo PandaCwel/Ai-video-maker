@@ -195,6 +195,17 @@ def director_plan(project_id: str):
 def add_character(project_id: str, payload: CharacterCreate):
     project = get_project_or_404(project_id)
     characters = project.get("characters", [])
+    if payload.reference_asset_id:
+        reference = next((item for item in project.get("assets", [])
+                          if item.get("id") == payload.reference_asset_id and item.get("category") == "image"), None)
+        if not reference:
+            raise HTTPException(status_code=400, detail="Nie znaleziono obrazu referencyjnego.")
+    existing = next((item for item in characters
+                     if str(item.get("name", "")).strip().casefold() == payload.name.strip().casefold()), None)
+    if existing:
+        existing.update(payload.model_dump())
+        store.update(project_id, characters=characters)
+        return existing
     character = {"id": __import__("uuid").uuid4().hex, **payload.model_dump()}
     characters.append(character)
     store.update(project_id, characters=characters)
