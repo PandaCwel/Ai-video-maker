@@ -151,9 +151,8 @@ def run_tts(job_id, project_dir, payload):
         release_vram()
 
 
-def validate_full_production(project_dir: Path, scenes):
+def validate_full_production(project_dir: Path, scenes, prepare_lipsync: bool = True):
     """Fail before expensive rendering if required voice/lip-sync assets are missing."""
-    ensure_wav2lip()
     project = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
     voices = _voice_map(project)
     shots = [shot for scene in scenes if isinstance(scene, dict) for shot in scene.get("shots", []) if isinstance(shot, dict)]
@@ -169,6 +168,8 @@ def validate_full_production(project_dir: Path, scenes):
         sample = Path(voice["sample_path"])
         if not sample.is_file():
             raise LocalModelError(f"Brak pliku próbki głosu: {sample}")
+    if prepare_lipsync:
+        ensure_wav2lip()
     return shots, voices
 
 
