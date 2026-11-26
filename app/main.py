@@ -165,7 +165,7 @@ async def director_plan(project_id: str):
     if not project["script"].strip():
         raise HTTPException(status_code=400, detail="Add a screenplay first.")
     try:
-        plan = await build_shot_plan(project["script"])
+        plan = build_shot_plan(project["script"])
     except LocalModelError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     store.update(project_id, analysis=plan, scenes=plan["scenes"], status="planning")
