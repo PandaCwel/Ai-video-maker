@@ -144,21 +144,17 @@ def save_script(project_id: str, payload: ScriptUpdate):
 
 
 @app.post("/api/projects/{project_id}/script/analyze")
-async def analyze_script(project_id: str):
+def analyze_script(project_id: str):
     project = get_project_or_404(project_id)
     if not project["script"].strip():
         raise HTTPException(status_code=400, detail="Script is empty")
     try:
-        llm = OpenAICompatibleLLM()
-        raw = await llm.complete("Analyze this screenplay. Return JSON only with logline, genre, tone, characters, scenes. Preserve story facts and do not invent dialogue.", project["script"][:90000])
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        analysis = json.loads(cleaned)
-        analysis["engine"] = "llm"
-    except (ProviderError, json.JSONDecodeError) as exc:
-        analysis = analyze_screenplay(project["script"])
-        analysis["warning"] = str(exc)
+        analysis = local_llm_json(
+            "Analyze this screenplay and return JSON only with logline, genre, tone, characters and scenes. Preserve story facts and never invent dialogue.",
+            project["script"][:50000])
+        analysis["engine"] = "local-llm"
+    except LocalModelError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     store.update(project_id, analysis=analysis, scenes=analysis.get("scenes", []), status="planning")
     return analysis
 
@@ -170,7 +166,7 @@ async def director_plan(project_id: str):
         raise HTTPException(status_code=400, detail="Add a screenplay first.")
     try:
         plan = await build_shot_plan(project["script"])
-    except ProviderError as exc:
+    except LocalModelError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     store.update(project_id, analysis=plan, scenes=plan["scenes"], status="planning")
     return plan
@@ -328,3 +324,8 @@ def download_job_output(job_id: str):
     if not path.is_relative_to(project_dir) or not path.is_file():
         raise HTTPException(status_code=404, detail="Output file not found.")
     return FileResponse(path, media_type="video/mp4" if path.suffix == ".mp4" else "application/octet-stream", filename=path.name)
+
+
+@app.get("/api/runtime")
+def runtime_status():
+    return local_status()
