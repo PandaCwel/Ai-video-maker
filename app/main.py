@@ -72,6 +72,7 @@ class VoiceCreate(BaseModel):
 class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=8000)
     image_url: str | None = None
+    reference_asset_id: str | None = None
     inputs: dict[str, Any] = {}
 
 
@@ -265,7 +266,7 @@ def generate(project_id: str, kind: str, payload: GenerateRequest, background: B
     get_project_or_404(project_id)
     if kind not in {"image", "video", "music", "lipsync"}:
         raise HTTPException(status_code=404, detail="Unknown generation type")
-    data = {**payload.inputs, "prompt": payload.prompt, "image_url": payload.image_url, "project_id": project_id}
+    data = {**payload.inputs, "prompt": payload.prompt, "image_url": payload.image_url, "reference_asset_id": payload.reference_asset_id, "project_id": project_id}
     job = create_job(project_id, kind, data)
     background.add_task(run_generation, job["id"], store.project_dir(project_id), kind, data)
     return job
