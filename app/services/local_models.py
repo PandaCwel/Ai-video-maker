@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import shutil
 from pathlib import Path
 from threading import RLock
 
@@ -252,13 +253,16 @@ def ensure_wav2lip():
     script = repo / "inference.py"
     try:
         if not script.is_file():
+            if repo.exists():
+                shutil.rmtree(repo)
             repo.parent.mkdir(parents=True, exist_ok=True)
             subprocess.run(["git", "clone", "--depth", "1", "https://github.com/Rudrabha/Wav2Lip.git", str(repo)],
                            check=True, capture_output=True, text=True, timeout=600)
         checkpoint.parent.mkdir(parents=True, exist_ok=True)
         if not checkpoint.is_file():
-            subprocess.run([sys.executable, "-m", "gdown", "--id",
-                            "15G3U08c8xsCkOqQxE38Z2XXDnPcOptNk", "-O", str(checkpoint)],
+            subprocess.run([sys.executable, "-m", "gdown",
+                            "https://drive.google.com/uc?id=15G3U08c8xsCkOqQxE38Z2XXDnPcOptNk",
+                            "-O", str(checkpoint)],
                            check=True, capture_output=True, text=True, timeout=1800)
         detector = repo / "face_detection" / "detection" / "sfd" / "s3fd.pth"
         if not detector.is_file():
@@ -269,6 +273,8 @@ def ensure_wav2lip():
             )
         if not checkpoint.is_file() or checkpoint.stat().st_size < 1024 * 1024:
             raise LocalModelError("Pobrany checkpoint Wav2Lip jest niekompletny.")
+        if not detector.is_file() or detector.stat().st_size < 1024 * 1024:
+            raise LocalModelError("Nie udało się pobrać wymaganego modelu detekcji twarzy S3FD.")
         return checkpoint.resolve(), script.resolve()
     except LocalModelError:
         raise
