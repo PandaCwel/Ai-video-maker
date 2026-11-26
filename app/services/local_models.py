@@ -167,10 +167,6 @@ def generate_video(prompt: str, output: Path, reference: Path | None = None, fra
             pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, beta_schedule="linear")
             pipe.enable_vae_slicing()
             pipe.enable_attention_slicing()
-            if torch.cuda.is_available():
-                pipe.enable_model_cpu_offload()
-            else:
-                pipe.to("cpu")
             call_kwargs = {}
             if reference:
                 from PIL import Image
@@ -181,6 +177,10 @@ def generate_video(prompt: str, output: Path, reference: Path | None = None, fra
                 pipe.set_ip_adapter_scale(float(os.getenv("LOCAL_IP_ADAPTER_SCALE", "0.65")))
                 with Image.open(reference) as ref_image:
                     call_kwargs["ip_adapter_image"] = ref_image.convert("RGB")
+            if torch.cuda.is_available():
+                pipe.enable_model_cpu_offload()
+            else:
+                pipe.to("cpu")
             result = pipe(prompt=prompt, num_frames=max(8, min(int(frames), 24)), guidance_scale=7,
                            num_inference_steps=18, **call_kwargs).frames[0]
             output.parent.mkdir(parents=True, exist_ok=True)
