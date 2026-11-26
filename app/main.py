@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 from typing import Any
@@ -13,14 +12,13 @@ from app.core.config import settings
 from app.services.director import build_shot_plan
 from app.services.jobs import create_job, get_job, list_jobs
 from app.services.media import save_upload
-from app.services.production import run_full_production, run_generation, run_tts
+from app.services.production import run_full_production, run_generation, run_tts, validate_full_production
 from app.services.project_store import ProjectNotFoundError, ProjectStore
-from app.services.local_models import LocalModelError, local_llm_json, local_status
+from app.services.local_models import LocalModelError, local_status
 from app.services.render import RenderError, render_video
-from app.services.screenplay import analyze_screenplay
 
 store = ProjectStore(settings.projects_dir)
-app = FastAPI(title=settings.app_name, version="0.2.0", description="AI film production workspace API")
+app = FastAPI(title=settings.app_name, version="0.3.0", description="Local AI film production workspace")
 ROOT_DIR = Path(__file__).resolve().parent.parent
 app.mount("/static", StaticFiles(directory=ROOT_DIR / "frontend"), name="static")
 
@@ -63,7 +61,7 @@ class CharacterCreate(BaseModel):
 
 class VoiceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    provider: str = Field(default="elevenlabs")
+    provider: str = Field(default="local XTTS-v2")
     provider_voice_id: str = Field(min_length=1, max_length=200)
     character_id: str | None = None
     consent_confirmed: bool = False
@@ -73,7 +71,7 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=8000)
     image_url: str | None = None
     reference_asset_id: str | None = None
-    inputs: dict[str, Any] = {}
+    inputs: dict[str, Any] = Field(default_factory=dict)
 
 
 class SpeechRequest(BaseModel):
@@ -149,19 +147,15 @@ def analyze_script(project_id: str):
     if not project["script"].strip():
         raise HTTPException(status_code=400, detail="Script is empty")
     try:
-        analysis = local_llm_json(
-            "Analyze this screenplay and return JSON only with logline, genre, tone, characters and scenes. Preserve story facts and never invent dialogue.",
-            project["script"][:50000])
-        analysis["engine"] = "local-llm"
-        analysis["scene_count"] = len(analysis.get("scenes", []))
+        analysis = build_shot_plan(project["script"])
     except LocalModelError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
-    store.update(project_id, analysis=analysis, scenes=analysis.get("scenes", []), status="planning")
+    store.update(project_id, analysis=analysis, scenes=analysis["scenes"], status="planning")
     return analysis
 
 
 @app.post("/api/projects/{project_id}/director/plan")
-async def director_plan(project_id: str):
+def director_plan(project_id: str):
     project = get_project_or_404(project_id)
     if not project["script"].strip():
         raise HTTPException(status_code=400, detail="Add a screenplay first.")
@@ -214,33 +208,26 @@ def list_assets(project_id: str):
     return {"assets": [{key: value for key, value in item.items() if key != "path"} for item in project.get("assets", [])]}
 
 
-@app.post("/api/projects/{project_id}/voices", status_code=201)
-def add_voice(project_id: str, payload: VoiceCreate):
-    project = get_project_or_404(project_id)
-    if not payload.consent_confirmed:
-        raise HTTPException(status_code=400, detail="Potwierdź zgodę na używanie tego głosu.")
-    voices = project.get("voices", [])
-    voice = {"id": __import__("uuid").uuid4().hex, **payload.model_dump()}
-    voices.append(voice)
-    store.update(project_id, voices=voices)
-    return voice
-
-
-
 @app.post("/api/projects/{project_id}/voices/clone", status_code=201)
 async def clone_voice(project_id: str, name: str = Form(...), consent_confirmed: bool = Form(False), sample: UploadFile = File(...)):
     project = get_project_or_404(project_id)
-    if not consent_confirmed: raise HTTPException(status_code=400, detail="Potwierdź prawo do użycia próbki głosu.")
+    if not consent_confirmed:
+        raise HTTPException(status_code=400, detail="Potwierdź prawo do użycia próbki głosu.")
     suffix = Path(sample.filename or "").suffix.lower()
-    if suffix not in {".wav", ".mp3", ".m4a", ".ogg", ".flac"}: raise HTTPException(status_code=400, detail="Nieobsługiwany format próbki.")
+    if suffix not in {".wav", ".mp3", ".m4a", ".ogg", ".flac"}:
+        raise HTTPException(status_code=400, detail="Nieobsługiwany format próbki.")
     content = await sample.read()
-    if len(content) > 25 * 1024 * 1024: raise HTTPException(status_code=400, detail="Próbka przekracza 25 MB.")
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Próbka przekracza 25 MB.")
     voice_dir = store.project_dir(project_id) / "assets" / "voices"
     voice_dir.mkdir(parents=True, exist_ok=True)
     sample_path = voice_dir / ("voice_" + __import__("uuid").uuid4().hex + suffix)
     sample_path.write_bytes(content)
-    voice = {"id": __import__("uuid").uuid4().hex, "name": name, "provider": "local XTTS-v2", "sample_path": str(sample_path), "language": "pl", "consent_confirmed": True}
-    voices = project.get("voices", []); voices.append(voice); store.update(project_id, voices=voices)
+    voice = {"id": __import__("uuid").uuid4().hex, "name": name.strip(), "provider": "local XTTS-v2",
+             "sample_path": str(sample_path), "language": "pl", "consent_confirmed": True}
+    voices = project.get("voices", [])
+    voices.append(voice)
+    store.update(project_id, voices=voices)
     return {key: value for key, value in voice.items() if key != "sample_path"}
 
 
@@ -257,7 +244,8 @@ def generate(project_id: str, kind: str, payload: GenerateRequest, background: B
     get_project_or_404(project_id)
     if kind not in {"image", "video", "music", "lipsync"}:
         raise HTTPException(status_code=404, detail="Unknown generation type")
-    data = {**payload.inputs, "prompt": payload.prompt, "image_url": payload.image_url, "reference_asset_id": payload.reference_asset_id, "project_id": project_id}
+    data = {**payload.inputs, "prompt": payload.prompt, "image_url": payload.image_url,
+            "reference_asset_id": payload.reference_asset_id, "project_id": project_id}
     job = create_job(project_id, kind, data)
     background.add_task(run_generation, job["id"], store.project_dir(project_id), kind, data)
     return job
@@ -294,7 +282,6 @@ def render_project(project_id: str, payload: RenderRequest):
     return FileResponse(output, media_type="video/mp4", filename="AI-Movie-Studio.mp4")
 
 
-
 class ProductionStart(BaseModel):
     reference_asset_id: str | None = None
 
@@ -305,6 +292,16 @@ def start_full_production(project_id: str, payload: ProductionStart, background:
     scenes = project.get("scenes") or []
     if not scenes:
         raise HTTPException(status_code=400, detail="Najpierw zapisz scenariusz i utwórz plan ujęć AI Director.")
+    try:
+        validate_full_production(store.project_dir(project_id), scenes)
+    except LocalModelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if payload.reference_asset_id:
+        try:
+            from app.services.production import _reference
+            _reference(store.project_dir(project_id), payload.reference_asset_id)
+        except LocalModelError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     job = create_job(project_id, "full_production", {"reference_asset_id": payload.reference_asset_id})
     background.add_task(run_full_production, job["id"], store.project_dir(project_id), project_id, scenes, payload.reference_asset_id)
     store.update(project_id, status="producing")
