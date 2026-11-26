@@ -1,4 +1,6 @@
+import base64
 import json
+import mimetypes
 import os
 from pathlib import Path
 import httpx
@@ -30,7 +32,18 @@ async def run_generation(job_id: str, project_dir: Path, kind: str, payload: dic
         if kind == "video":
             model = os.getenv("REPLICATE_VIDEO_MODEL", "")
             inputs = {"prompt": payload["prompt"]}
-            if payload.get("image_url"): inputs["image"] = payload["image_url"]
+            if payload.get("image_url"):
+                inputs["image"] = payload["image_url"]
+            elif payload.get("reference_asset_id"):
+                project_meta = json.loads((project_dir / "project.json").read_text(encoding="utf-8"))
+                asset = next((a for a in project_meta.get("assets", []) if a.get("id") == payload["reference_asset_id"] and a.get("category") == "image"), None)
+                if not asset:
+                    raise ValueError("Wybrane zdjęcie referencyjne nie istnieje w bibliotece projektu.")
+                image_path = Path(asset["path"])
+                if image_path.stat().st_size > 10 * 1024 * 1024:
+                    raise ValueError("Zdjęcie referencyjne przekracza limit 10 MB dla data URI.")
+                mime = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
+                inputs["image"] = f"data:{mime};base64," + base64.b64encode(image_path.read_bytes()).decode("ascii")
         elif kind == "image":
             model = os.getenv("REPLICATE_IMAGE_MODEL", "")
             inputs = {"prompt": payload["prompt"]}
